@@ -1,12 +1,12 @@
 #! /usr/bin/env python
 
-#from wsgiref.util import setup_testing_defaults
+import logging
+import urlparse
+import json
+import os
+logging.basicConfig(filename='/var/www/my.hackerspace.com/spaceapi.log',level=logging.DEBUG)
 
-# A relatively simple WSGI application. It's going to print out the
-# environment dictionary after being updated by setup_testing_defaults
 def spaceapi_app(environ, start_response):
-
-    #setup_testing_defaults(environ)
 
     Router.set_environ(environ)
 
@@ -16,25 +16,14 @@ def spaceapi_app(environ, start_response):
     start_response(status, headers)
 
     return {
-        'sensor' : SensorController.execute
+        'sensor' : SensorController.execute #Other possible commands in this dict
     }.get(Router.get_controller(), StatusController.execute)()
 
-
-    #request_uri = environ['REQUEST_URI']
-
-    #print(test)
-    #print('test')
-    #print >> environ['wsgi.errors'], "application debug #2"
-
-    #ret = request_uri
-    #ret = [("%s: %s\n" % (key, value)).encode("utf-8")
-    #       for key, value in environ.items()]
-
-    return ret
 
 
 class SensorController:
 
+    key = '86f7896f97asdf89u0a9s7d7fdasgsda88af'
     @classmethod
     def execute(cls):
         #return Router.get_action()
@@ -45,10 +34,22 @@ class SensorController:
     @classmethod
     def noneAction(cls):
         return ''
-
     @classmethod
     def setAction(cls):
-        return 'SensorController::set'
+        logging.debug(Router.get_post('key')[0])
+        if any(p == cls.key for p in Router.get_post('key')):
+            try:
+                js = json.loads(Router.get_post('sensors')[0]) #hack
+            except:
+                logging.warn(Router.get_post('sensors'))
+                return 'Invalid JSON'
+            for sensor in js:
+                file = open(Router.environ['CONTEXT_DOCUMENT_ROOT']+os.sep+'data'+os.sep+sensor,'w')
+                file.write(json.dumps(js[sensor])) #convert to a neat format to read back later
+                file.close()
+            return 'SensorController::set'
+        else:
+            return 'Not allowed'
 
 
 class StatusController:
@@ -77,10 +78,19 @@ class Router:
 
     @classmethod
     def get_segment(cls, index):
-        request_uri = cls.environ['REQUEST_URI']
-        segments = request_uri.strip('/').split('/')
-        if len(segments) >= index-1:
+        request_uri = cls.environ['PATH_INFO']
+        segments = request_uri.lower().strip('/').split('/')
+        if len(segments)-1 >= index:
             return segments[index]
+        else:
+            return ''
+
+    @classmethod
+    def get_post(cls, value):
+        postdata = urlparse.parse_qs(cls.environ['QUERY_STRING']) #lowercase this
+        logging.debug(postdata['key'][0])
+        if value in postdata:
+            return postdata[value]
         else:
             return ''
 
@@ -103,12 +113,6 @@ class Output():
     def json():
         return ''
 
-
-class Sensor():
-
-    @staticmethod
-    def save(sensors):
-        return ''
 
 ######################################################################
 
